@@ -11,6 +11,15 @@ export interface NetworkStats {
   avgSlotTimeMs: number;
   health: 'ok' | 'behind' | 'unknown';
   lastUpdated: string;
+  rpcProvider?: string;
+  rpcLatencyMs?: number;
+}
+
+export interface SolamiConfig {
+  apiKey: string;
+  customRpc: string;
+  provider: 'solami' | 'mainnet' | 'custom';
+  latencyMs: number;
 }
 
 export interface ValidatorInfo {

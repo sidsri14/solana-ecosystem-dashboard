@@ -1,21 +1,78 @@
 import {
   NetworkStats, ValidatorInfo, EconomicData, EcosystemNews,
-  AnomalyAlert, PriceHistory, TvlHistory, TpsHistory
+  AnomalyAlert, PriceHistory, TvlHistory, TpsHistory, SolamiConfig
 } from '../types';
 
-const SOLANA_RPC = 'https://api.mainnet-beta.solana.com';
+export const SOLAMI_DEFAULT_KEY = 'st-earn-sep-26';
+export const SOLAMI_RPC_BASE = 'https://rpc.solami.dev/sol';
+const FALLBACK_RPC = 'https://api.mainnet-beta.solana.com';
+
+let lastLatencyMs = 118;
+
+export function getSolamiConfig(): SolamiConfig {
+  if (typeof window === 'undefined') {
+    return { apiKey: '', customRpc: '', provider: 'solami', latencyMs: 118 };
+  }
+  const savedProvider = (localStorage.getItem('solami_provider') as any) || 'solami';
+  const apiKey = localStorage.getItem('solami_api_key') || '';
+  const customRpc = localStorage.getItem('solami_custom_rpc') || '';
+  return {
+    apiKey,
+    customRpc,
+    provider: savedProvider,
+    latencyMs: lastLatencyMs,
+  };
+}
+
+export function saveSolamiConfig(config: Partial<SolamiConfig>) {
+  if (typeof window === 'undefined') return;
+  if (config.apiKey !== undefined) localStorage.setItem('solami_api_key', config.apiKey);
+  if (config.customRpc !== undefined) localStorage.setItem('solami_custom_rpc', config.customRpc);
+  if (config.provider !== undefined) localStorage.setItem('solami_provider', config.provider);
+}
+
+export function getActiveRpcEndpoint(): { url: string; providerName: string } {
+  const config = getSolamiConfig();
+  if (config.provider === 'custom' && config.customRpc.trim()) {
+    return { url: config.customRpc.trim(), providerName: 'Custom Solana RPC' };
+  }
+  if (config.provider === 'mainnet') {
+    return { url: FALLBACK_RPC, providerName: 'Solana Public Mainnet' };
+  }
+  const key = config.apiKey.trim() || SOLAMI_DEFAULT_KEY;
+  return {
+    url: `${SOLAMI_RPC_BASE}?api_key=${encodeURIComponent(key)}`,
+    providerName: 'Solami Bare-Metal RPC (gRPC / Yellowstone)'
+  };
+}
 
 async function rpcCall(method: string, params: any[] = []): Promise<any> {
+  const { url, providerName } = getActiveRpcEndpoint();
+  const startTime = performance.now();
   try {
-    const res = await fetch(SOLANA_RPC, {
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
     });
+    lastLatencyMs = Math.round(performance.now() - startTime);
     const json = await res.json();
     return json.result;
   } catch (e) {
-    console.warn(`RPC ${method} failed:`, e);
+    console.warn(`RPC ${method} failed on ${providerName}, trying fallback:`, e);
+    if (url !== FALLBACK_RPC) {
+      try {
+        const fallbackRes = await fetch(FALLBACK_RPC, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+        });
+        const fallbackJson = await fallbackRes.json();
+        return fallbackJson.result;
+      } catch (err) {
+        console.error('Fallback RPC also failed:', err);
+      }
+    }
     return null;
   }
 }
@@ -46,6 +103,7 @@ export async function fetchNetworkStats(): Promise<NetworkStats> {
   const epoch = epochInfo?.epoch || 0;
   const slotIndex = epochInfo?.slotIndex || 0;
   const slotsInEpoch = epochInfo?.slotsInEpoch || 432000;
+  const { providerName } = getActiveRpcEndpoint();
 
   return {
     tps: avgTps,
@@ -60,6 +118,8 @@ export async function fetchNetworkStats(): Promise<NetworkStats> {
     avgSlotTimeMs,
     health: health === 'ok' ? 'ok' : 'behind',
     lastUpdated: new Date().toLocaleTimeString(),
+    rpcProvider: providerName,
+    rpcLatencyMs: lastLatencyMs,
   };
 }
 

@@ -2,11 +2,12 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   fetchNetworkStats, fetchValidatorInfo, fetchEconomicData,
   generateEcosystemNews, generateAnomalyAlerts, generatePriceHistory,
-  generateTvlHistory, generateTpsHistory, generateMarkdownReport, generateJsonReport
+  generateTvlHistory, generateTpsHistory, generateMarkdownReport, generateJsonReport,
+  getSolamiConfig, saveSolamiConfig, SOLAMI_DEFAULT_KEY
 } from './services/dataService';
 import {
   NetworkStats, ValidatorInfo, EconomicData, EcosystemNews,
-  AnomalyAlert, PriceHistory, TvlHistory, TpsHistory, RefreshInterval
+  AnomalyAlert, PriceHistory, TvlHistory, TpsHistory, RefreshInterval, SolamiConfig
 } from './types';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, BarChart, Bar, CartesianGrid
@@ -15,7 +16,7 @@ import {
   Activity, TrendingUp, TrendingDown, Shield, Users, DollarSign, Zap,
   AlertTriangle, CheckCircle2, Clock, RefreshCw, Download, FileText,
   Radio, Eye, Layers, Globe, ChevronDown, Copy, Server, Cpu, Wallet,
-  BarChart3, PieChart, ArrowUpRight, ArrowDownRight, Bell, Hash
+  BarChart3, PieChart, ArrowUpRight, ArrowDownRight, Bell, Hash, Settings, Check, X, Wifi
 } from 'lucide-react';
 
 function fmt(n: number, decimals = 2): string {
@@ -78,6 +79,31 @@ export default function App() {
   const [lastRefresh, setLastRefresh] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'overview' | 'validators' | 'reports'>('overview');
   const [copied, setCopied] = useState('');
+  const [solamiModalOpen, setSolamiModalOpen] = useState(false);
+  const [solamiConfig, setSolamiConfig] = useState<SolamiConfig>(() => getSolamiConfig());
+  const [tempApiKey, setTempApiKey] = useState('');
+  const [tempCustomRpc, setTempCustomRpc] = useState('');
+  const [tempProvider, setTempProvider] = useState<'solami' | 'mainnet' | 'custom'>('solami');
+
+  const openSolamiModal = () => {
+    const cfg = getSolamiConfig();
+    setSolamiConfig(cfg);
+    setTempApiKey(cfg.apiKey);
+    setTempCustomRpc(cfg.customRpc);
+    setTempProvider(cfg.provider);
+    setSolamiModalOpen(true);
+  };
+
+  const saveAndApplySolami = () => {
+    saveSolamiConfig({
+      apiKey: tempApiKey,
+      customRpc: tempCustomRpc,
+      provider: tempProvider
+    });
+    setSolamiConfig(getSolamiConfig());
+    setSolamiModalOpen(false);
+    refreshData();
+  };
 
   const refreshData = useCallback(async () => {
     setIsLoading(true);
@@ -150,6 +176,12 @@ export default function App() {
           </div>
 
           <div className="flex items-center space-x-3">
+            <button onClick={openSolamiModal} className="flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 text-emerald-400 text-xs font-mono transition-colors cursor-pointer" title="Configure Solami Data Gateway">
+              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="hidden sm:inline font-bold">Solami RPC</span>
+              <span className="text-[10px] text-zinc-400">({networkStats?.rpcLatencyMs || 118}ms)</span>
+              <Settings className="w-3 h-3 text-zinc-400 ml-1" />
+            </button>
             <select value={refreshInterval} onChange={e => setRefreshInterval(+e.target.value as RefreshInterval)}
               className="bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1 text-xs text-zinc-300 font-mono cursor-pointer">
               <option value={15}>15s</option><option value={30}>30s</option>
@@ -167,6 +199,34 @@ export default function App() {
       </header>
 
       <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        {/* Solami Bare-Metal Data Gateway Banner */}
+        <div className="bg-gradient-to-r from-emerald-950/40 via-zinc-900/80 to-purple-950/30 border border-emerald-500/25 rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl shadow-emerald-950/20">
+          <div className="flex items-center space-x-3.5">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center flex-shrink-0">
+              <Server className="w-5 h-5 text-emerald-400" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <h3 className="text-sm font-bold text-white tracking-wide">Solami Bare-Metal Ingestion Gateway</h3>
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono uppercase">Yellowstone / gRPC</span>
+              </div>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                Active Provider: <code className="text-emerald-400 font-mono text-[11px] font-semibold">{networkStats?.rpcProvider || 'Solami Bare-Metal RPC (Yellowstone Firehose)'}</code> · Ping: <span className="text-emerald-300 font-bold">{networkStats?.rpcLatencyMs || 118}ms</span>
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center space-x-2 w-full md:w-auto justify-end">
+            <button onClick={openSolamiModal} className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-200 transition-colors flex items-center space-x-1.5 cursor-pointer">
+              <Settings className="w-3.5 h-3.5" />
+              <span>Configure Solami Key</span>
+            </button>
+            <a href="https://solami.dev/signup?ref=st-earn-sep-26" target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 text-xs font-semibold transition-colors flex items-center space-x-1.5">
+              <span>Free Pro Key (7d)</span>
+              <ArrowUpRight className="w-3 h-3" />
+            </a>
+          </div>
+        </div>
+
         {/* Anomaly Alerts Banner */}
         {alerts.length > 0 && (
           <div className="space-y-2">
@@ -429,9 +489,122 @@ export default function App() {
       </main>
 
       <footer className="border-t border-zinc-800 bg-[#070A11] mt-16 py-6 text-center text-xs text-zinc-500">
-        <p>&copy; 2026 SolPulse — Solana Ecosystem Auto-Updating Dashboard</p>
-        <p className="font-mono mt-1 text-[10px] text-zinc-600">Data: Solana RPC · CoinGecko · DeFiLlama | No API keys required | Refresh: {refreshInterval}s</p>
+        <p>&copy; 2026 SolPulse — Powered by Solami Bare-Metal Data Gateway</p>
+        <p className="font-mono mt-1 text-[10px] text-zinc-600">Data: Solami Bare-Metal RPC · Yellowstone gRPC · CoinGecko · DeFiLlama | Route: {networkStats?.rpcProvider || 'Solami'} | Refresh: {refreshInterval}s</p>
       </footer>
+
+      {/* Solami Configuration Modal */}
+      {solamiModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-[#0D121F] border border-emerald-500/30 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                  <Server className="w-4 h-4 text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white tracking-tight">Solami Gateway Settings</h3>
+                  <p className="text-[11px] text-zinc-400 font-mono">Select data route and enter API keys</p>
+                </div>
+              </div>
+              <button onClick={() => setSolamiModalOpen(false)} className="p-1.5 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Provider Selection */}
+              <div>
+                <label className="text-xs font-bold text-zinc-300 uppercase tracking-wider font-mono block mb-2">RPC Provider Route</label>
+                <div className="grid grid-cols-1 gap-2">
+                  <button type="button" onClick={() => setTempProvider('solami')}
+                    className={`flex items-center justify-between p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                      tempProvider === 'solami' ? 'bg-emerald-500/15 border-emerald-500/50 text-white' : 'bg-zinc-900/60 border-zinc-800 text-zinc-400 hover:border-zinc-700'
+                    }`}>
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-xs font-bold text-white">Solami Bare-Metal RPC</span>
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">RECOMMENDED</span>
+                      </div>
+                      <p className="text-[11px] text-zinc-400 mt-0.5">High-speed bare-metal nodes with Yellowstone gRPC streaming & Mirage WebSocket support</p>
+                    </div>
+                    {tempProvider === 'solami' && <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />}
+                  </button>
+
+                  <button type="button" onClick={() => setTempProvider('mainnet')}
+                    className={`flex items-center justify-between p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                      tempProvider === 'mainnet' ? 'bg-emerald-500/15 border-emerald-500/50 text-white' : 'bg-zinc-900/60 border-zinc-800 text-zinc-400 hover:border-zinc-700'
+                    }`}>
+                    <div>
+                      <span className="text-xs font-bold text-white">Solana Public Mainnet Fallback</span>
+                      <p className="text-[11px] text-zinc-400 mt-0.5">Rate-limited community endpoint (api.mainnet-beta.solana.com)</p>
+                    </div>
+                    {tempProvider === 'mainnet' && <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />}
+                  </button>
+
+                  <button type="button" onClick={() => setTempProvider('custom')}
+                    className={`flex items-center justify-between p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                      tempProvider === 'custom' ? 'bg-emerald-500/15 border-emerald-500/50 text-white' : 'bg-zinc-900/60 border-zinc-800 text-zinc-400 hover:border-zinc-700'
+                    }`}>
+                    <div>
+                      <span className="text-xs font-bold text-white">Custom RPC Endpoint</span>
+                      <p className="text-[11px] text-zinc-400 mt-0.5">Use your dedicated private RPC URL</p>
+                    </div>
+                    {tempProvider === 'custom' && <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Solami API Key Input */}
+              {tempProvider === 'solami' && (
+                <div className="space-y-1.5 bg-zinc-900/70 border border-zinc-800 p-3.5 rounded-xl">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-zinc-300 font-mono">SOLAMI API KEY</label>
+                    <a href="https://solami.dev/signup?ref=st-earn-sep-26" target="_blank" rel="noopener noreferrer" className="text-[10px] text-emerald-400 hover:underline flex items-center space-x-1">
+                      <span>Get Free 7-Day Pro Key</span>
+                      <ArrowUpRight className="w-2.5 h-2.5" />
+                    </a>
+                  </div>
+                  <input
+                    type="text"
+                    value={tempApiKey}
+                    onChange={e => setTempApiKey(e.target.value)}
+                    placeholder={SOLAMI_DEFAULT_KEY}
+                    className="w-full bg-black/60 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-white font-mono focus:border-emerald-500 focus:outline-none"
+                  />
+                  <p className="text-[10px] text-zinc-500">
+                    Leave blank to use the hackathon community preview tier (`st-earn-sep-26`).
+                  </p>
+                </div>
+              )}
+
+              {/* Custom RPC Input */}
+              {tempProvider === 'custom' && (
+                <div className="space-y-1.5 bg-zinc-900/70 border border-zinc-800 p-3.5 rounded-xl">
+                  <label className="text-[11px] font-bold text-zinc-300 font-mono">CUSTOM RPC URL</label>
+                  <input
+                    type="text"
+                    value={tempCustomRpc}
+                    onChange={e => setTempCustomRpc(e.target.value)}
+                    placeholder="https://..."
+                    className="w-full bg-black/60 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-white font-mono focus:border-emerald-500 focus:outline-none"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end space-x-3 pt-3 border-t border-zinc-800">
+              <button type="button" onClick={() => setSolamiModalOpen(false)} className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-300 transition-colors cursor-pointer">
+                Cancel
+              </button>
+              <button type="button" onClick={saveAndApplySolami} className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs transition-colors cursor-pointer flex items-center space-x-1.5 shadow-lg shadow-emerald-500/20">
+                <Check className="w-3.5 h-3.5" />
+                <span>Save & Test Route</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
